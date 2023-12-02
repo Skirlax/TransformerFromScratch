@@ -1,0 +1,66 @@
+class TokenEmbeddings:
+    def __init__(self, name: str = 'word2vec-google-news-300'):
+        self.embed_model = api.load(name)
+        nltk.download('punkt')
+
+    def forward(self, tokens: list):
+        return np.array([self.embed_model[token] for token in tokens if token in self.embed_model])
+
+    def tokenize_forward(self, text: str):
+        tokenized = word_tokenize(text)
+        return self.forward(tokenized)
+
+    def tokenize_forward_batch(self, texts: list, pad: bool = True, max_len: int or None = None):
+        if max_len is None:
+            max_len = self.find_max_len(texts)
+        if pad:
+            texts = self.pad(texts, max_len)
+        texts = self.insert_sos_eos(texts)
+        return np.array([self.tokenize_forward(text) for text in texts])
+
+    def tokenize_to_idx_batch(self,texts: list):
+        return np.array([self.tokenize_to_idx(text) for text in texts])
+
+    def tokenize_to_idx(self,text: str):
+        tokenized = word_tokenize(text)
+        return np.array([self.embed_model.key_to_index[token] for token in tokenized if token in self.embed_model])
+
+    def make_matrix(self) -> (np.ndarray, str):
+        vocab_words = self.embed_model.key_to_index
+        matrix = np.zeros((len(vocab_words), self.embed_model.vector_size))
+        message = "Words not in vocabulary: "
+        for word, i in vocab_words.items():
+            try:
+                matrix[i] = self.embed_model[word]
+            except KeyError:
+                message += f"{word}, "
+
+        return matrix, message
+
+    def find_max_len(self, texts: list) -> int:
+        return max([len(text) for text in texts])
+
+    def pad(self, texts: list, max_len: int) -> list:
+        nltk.pad_sequence(texts, maxlen=max_len, padding='post', truncating='post')
+
+    def insert_sos_eos(self, texts: list) -> list:
+        return [['<SOS>'] + text + ['<EOS>'] for text in texts]
+
+    def add_special_to_vocab(self):
+        self
+
+    def __call__(self, tokens: list):
+        return self.forward(tokens)
+
+
+ # @staticmethod
+    # def forward(token_embeddings: np.ndarray):
+    #     d = token_embeddings.shape[1]
+    #     const = 10_000
+    #     for pos in range(token_embeddings.shape[0]):
+    #         for i in range(d):
+    #             if i % 2 == 0:
+    #                 embeds = np.sin(pos / (const ** ((2 * i) / d)))
+    #             else:
+    #                 embeds = np.cos(pos / (const ** ((2 * i) / d)))
+    #             token_embeddings[pos][i] += embeds
