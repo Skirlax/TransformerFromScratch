@@ -1,7 +1,7 @@
 import random
 
 import torch as th
-
+import numpy as np
 from TransformerModel.Layers.decoder_layer import DecoderLayer
 from TransformerModel.Layers.encoder_layer import EncoderLayer
 from Embeddings.positional_embeddings import PositionalEmbeddings
@@ -14,6 +14,7 @@ from torchmetrics.functional import accuracy
 import matplotlib.pyplot as plt
 from itertools import chain
 import wandb
+from collections import Counter
 
 
 class TransformerEncoderDecoder(th.nn.Module):
@@ -97,11 +98,13 @@ class TransformerTrainer:
         self.lr = lr
         self.table = table
         self.vocab = vocab
+        self.save_tokens_every = 1000
         self.block_size = block_size
         self.device = th.device("cuda" if th.cuda.is_available() else "cpu")
         self.train_losses = []
         self.test_losses = []
         self.accuracies = []
+        self.error_tokens = []
         self.scheduler = None
 
     def train(self, train, test, epochs: int, batch_size: int, eval_every: int = 500):
@@ -111,6 +114,7 @@ class TransformerTrainer:
         # self.scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer,min_lr=1e-8,verbose=True)
         self.transformer.to(self.device)
         self.transformer.train()
+        # hello how are you>?
         pbar = tqdm(range(epochs))
         for epoch in pbar:
             x_batch, y_batch = self.make_batch(train, batch_size, self.block_size)
@@ -128,8 +132,9 @@ class TransformerTrainer:
                 self.test(test, batch_size, 50)
                 acc = self.calculate_accuracy(test, batch_size)
                 self.transformer.train()
-                wandb.log({"train_loss": loss.item(), "test_loss": self.test_losses[-1], "accuracy": acc,
-                           "table_key": self.table})
+                wandb.log({"train_loss": loss.item(), "test_loss": self.test_losses[-1], "accuracy": acc})
+            if epoch % self.save_tokens_every == 0:
+                self.save_error_tokens(15)
             else:
                 wandb.log({"train_loss": loss.item()})
 
@@ -144,15 +149,18 @@ class TransformerTrainer:
             output = self.transformer.forward(x_batch, None)
             otp = th.softmax(output, dim=-1)
             otp = th.argmax(otp, dim=-1)
-            otp = otp.tolist()
-            decoded = decode(otp, self.vocab)
+            errror_tokens = th.where(otp != y_batch)[1].tolist()
+            self.error_tokens.append(errror_tokens)
+            # otp = otp.tolist()
+            # decoded = decode(otp, self.vocab)
             # print(len(decoded))
             # print(decoded[63])
-            random_choice = random.randint(0, len(decoded) - 1)
-            ybt = y_batch.tolist()
-            decoded2 = decode(ybt, self.vocab)
-            if self.table is not None:
-                self.table.add_data(decoded[random_choice:random_choice + 5], decoded2[random_choice:random_choice + 5])
+            # random_choice = random.randint(0, len(decoded) - 1)
+            # ybt = y_batch.tolist()
+            # decoded2 = decode(ybt, self.vocab)
+            #
+            # if self.table is not None:
+            #     self.table.add_data(decoded[random_choice:random_choice + 5], decoded2[random_choice:random_choice + 5])
             loss = self.loss(output.view(-1, output.size(-1)), y_batch.view(-1))
             self.test_losses.append(loss.item())
             pbar.set_description(f'Test Epoch: {epoch} Loss: {loss}')
@@ -167,6 +175,18 @@ class TransformerTrainer:
         output = th.softmax(output, dim=-1)
         output = th.argmax(output, dim=-1)
         return accuracy(output, y_batch, task="multiclass", num_classes=len(self.vocab))
+
+    @th.no_grad()
+    def save_error_tokens(self, n: int):
+        counter = Counter(chain.from_iterable(self.error_tokens))
+        top_k = [x[0] for x in counter.most_common(n)]
+        # top_k = list(chain.from_iterable(top_k))
+        top_k = list(set(top_k))
+        top_k = [[x] for x in top_k]
+        decoded = decode(top_k, self.vocab)
+        with open("error_tokens.txt", "a+") as file:
+            file.write("-"*30+"\n\n"+"\n".join(decoded))
+        self.error_tokens.clear()
 
         # arg_max = output.argmax(dim=-1, keepdim=True)
         # self.show_most_error_tokens(arg_max, y_batch)

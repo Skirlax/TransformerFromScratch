@@ -22,9 +22,9 @@ def main():
     # with open("/home/skyr/PycharmProjects/TransformerFromScratch/Embeddings/tiny_s_final.json", "r") as file:
     #     vocab = json.load(file)
     # text = encode(text, vocab)
-    with open("/home/skyr/PycharmProjects/TransformerFromScratch/Datasets/Inheritance/big_eragon_encoded.pkl",
+    with open("/home/skyr/PycharmProjects/TransformerFromScratch/Datasets/Inheritance/encoded_big.pkl",
               "rb") as file:
-        text = pickle.load(file)["input_ids"]
+        text = pickle.load(file)
 
     with open("/home/skyr/PycharmProjects/TransformerFromScratch/Datasets/Inheritance/vocab_big.json", "r") as file:
         vocab = json.load(file)
@@ -34,8 +34,8 @@ def main():
     dropout_p = 0.55
     feed_forward_size = 916
     num_layers = 12
-    # vocab_size = len(vocab)
-    vocab_size = 50257
+    vocab_size = len(vocab)
+    # vocab_size = 50257
     # test_lr = 1e-5
     test_lr = 3e-4
     block_size = 108
