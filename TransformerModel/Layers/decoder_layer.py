@@ -16,13 +16,13 @@ class DecoderLayer(th.nn.Module):
         self.dropout = th.nn.Dropout(p=dropout_p)
 
     def forward(self, x, encoder_output):
+        x = self.layer_norm1.forward(x)
         self_masked_attn_output = self.self_masked_attn.forward(x.clone(), mask=True)
         x += self.dropout(self_masked_attn_output)
-        x = self.layer_norm1.forward(x)
-        cross_attn_out = self.cross_attn.forward(x.clone(), encoder_output=encoder_output)
-        x += self.dropout(cross_attn_out)
         x = self.layer_norm2.forward(x)
+        cross_attn_out = self.cross_attn.forward(x.clone(), encoder_output=encoder_output,mask=True)
+        x += self.dropout(cross_attn_out)
+        x = self.layer_norm3.forward(x)
         feed_forward_out = self.feed_forward.forward(x.clone())
         x += self.dropout(feed_forward_out.clone())
-        x = self.layer_norm3.forward(x)
         return x

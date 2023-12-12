@@ -1,0 +1,1 @@
+{"embedd_dim": 144, "num_heads": 7, "dropout_p": 0.2011408235618257, "feed_forward_size": 916, "num_layers": 12, "block_size": 108, "lr": 0.005211968736430753, "weight_decay": 0.007548162081615722}
