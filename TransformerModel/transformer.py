@@ -91,13 +91,14 @@ class TransformerDecoder(th.nn.Module):
 
 class TransformerTrainer:
     def __init__(self, transformer: th.nn.Module, optimizer: th.optim,
-                 loss_fn: th.nn, lr: float, block_size: int, weight_decay: float, vocab: dict, table):
+                 loss_fn: th.nn, lr: float, block_size: int, weight_decay: float, vocab: dict, table,log: bool = True):
         self.transformer = transformer
         self.optimizer = optimizer(self.transformer.parameters(), lr=lr, weight_decay=weight_decay)
         self.loss = loss_fn()
         self.lr = lr
         self.table = table
         self.vocab = vocab
+        self.log = log
         self.save_tokens_every = 1000
         self.block_size = block_size
         self.device = th.device("cuda" if th.cuda.is_available() else "cpu")
@@ -132,10 +133,11 @@ class TransformerTrainer:
                 self.test(test, batch_size, 50)
                 acc = self.calculate_accuracy(test, batch_size)
                 self.transformer.train()
-                wandb.log({"train_loss": loss.item(), "test_loss": self.test_losses[-1], "accuracy": acc})
+                if self.log:
+                    wandb.log({"train_loss": loss.item(), "test_loss": self.test_losses[-1], "accuracy": acc})
             if epoch % self.save_tokens_every == 0:
                 self.save_error_tokens(15)
-            else:
+            elif self.log:
                 wandb.log({"train_loss": loss.item()})
 
     @th.no_grad()

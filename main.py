@@ -1,15 +1,14 @@
-import torch as th
-from Datasets.TinyShakespeare.prepare import prepare_to_tokenize
-# from Embeddings.token_embeddings import encode, decode
-from Embeddings.token_embeddings import gpt2_encode, gpt2_decode
-from TransformerModel.transformer import TransformerDecoder, TransformerTrainer
 import json
-import numpy as np
-from itertools import chain
-from Embeddings.constants import EmbedConstants
-import random
-import optuna
 import pickle
+from itertools import chain
+
+import numpy as np
+import optuna
+import torch as th
+
+from Datasets.TinyShakespeare.prepare import prepare_to_tokenize
+from Embeddings.token_embeddings import encode,decode
+from TransformerModel.transformer import TransformerDecoder, TransformerTrainer
 
 
 def main():
@@ -66,9 +65,9 @@ def main():
     }, "model.pth")
     trainer.draw_losses()
 
-    input_ = gpt2_encode(["Eragon"])
+    input_ = encode(["Eragon"], vocab)
     input_ = th.tensor(input_).long().cuda().reshape(1, -1)
-    outputs = gpt2_decode(transformer.generate(input_, 1000, block_size))
+    outputs = decode(transformer.generate(input_, 1000, block_size), vocab)
     print(outputs)
 
 
@@ -108,55 +107,70 @@ def gen():
     inpt = ""
     while inpt != "q":
         inpt = input("Enter a sentence: ")
-        input_ = gpt2_encode([inpt])
+        input_ = encode([inpt], vocab)
         input_ = th.tensor(input_).long().cuda().reshape(1, -1)
         gen_ = transformer.generate(input_, 64 * 4, block_size)
         # gen_ = chain.from_iterable(gen_)
-        outp = gpt2_decode(gen_)
+        outp = decode(gen_,vocab)
         print("".join(outp))
     # print(outputs)
 
     # trainer.train(x, y, 15, 5)
 
 
+def nearest_lower_divisible(number, divisor):
+    return number - (number % divisor)
+
+
 def param_search(trial_epochs: int, num_trials: int):
-    text = prepare_to_tokenize(
-        "/home/skyr/PycharmProjects/TransformerFromScratch/Datasets/Inheritance/inheritance_text.txt")
-    with open("/home/skyr/PycharmProjects/TransformerFromScratch/Datasets/Inheritance/edited_vocab.json", "r") as file:
+    text = prepare_to_tokenize("/home/skyr/PycharmProjects/TransformerFromScratch/Datasets/TinyShakespeare/input.txt")
+    with open("/home/skyr/PycharmProjects/TransformerFromScratch/Datasets/TinyShakespeare/vocab.json", "r") as file:
         vocab = json.load(file)
-    text = gpt2_encode(text)
+
+    text = encode(text, vocab)
 
     def objective(trial):
-        embedd_dim = trial.suggest_int("embedd_dim", 120, 540, step=6)
         num_heads = trial.suggest_int("num_heads", 4, 12)
-        dropout_p = trial.suggest_float("dropout_p", 0.1, 0.6)
+        base_embed = nearest_lower_divisible(min(num_heads ** 2, 90), num_heads)
+        factor = trial.suggest_int("factor", 1, 6)
+        embedd_dim = base_embed * factor
+        dropout_p = trial.suggest_float("dropout_p", 0.1, 0.55)
         feed_forward_size = trial.suggest_int("feed_forward_size", 600, 1800)
         num_layers = trial.suggest_int("num_layers", 4, 12)
         block_size = trial.suggest_int("block_size", 64, 128)
         lr = trial.suggest_float("lr", 1e-6, 7e-3)
         weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-1)
         batch_size = 32
-        transformer = TransformerDecoder(embedd_dim, num_heads, dropout_p, feed_forward_size, num_layers, len(vocab),
-                                         block_size)
-        trainer = TransformerTrainer(transformer, th.optim.AdamW, th.nn.CrossEntropyLoss, lr, block_size, weight_decay)
+        # transformer = TransformerDecoder(embedd_dim, num_heads, dropout_p, feed_forward_size, num_layers, len(vocab),
+        #                                  block_size)
+        # trainer = TransformerTrainer(transformer, th.optim.AdamW, th.nn.CrossEntropyLoss, lr, block_size, weight_decay)
         data = list(chain.from_iterable(text))
         test = data[:int(len(data) * 0.1)]
         # val = data[int(len(data) * 0.1):int(len(data) * 0.2)]
         train = data[int(len(data) * 0.2):]
         train = th.tensor(train).long()
         test = th.tensor(test).long()
-        batch_size = find_batch_size(batch_size, trainer, train, test)
-        del transformer
-        del trainer
+        # batch_size = find_batch_size(batch_size, trainer, train, test)
+        # del transformer
+        # del trainer
         transformer = TransformerDecoder(embedd_dim, num_heads, dropout_p, feed_forward_size, num_layers, len(vocab),
                                          block_size)
-        trainer = TransformerTrainer(transformer, th.optim.AdamW, th.nn.CrossEntropyLoss, lr, block_size, weight_decay)
+        trainer = TransformerTrainer(transformer, th.optim.AdamW, th.nn.CrossEntropyLoss, lr, block_size, weight_decay,
+                                     vocab, None, log=False)
         trainer.train(train, test, trial_epochs, batch_size)
-        return np.mean(trainer.test_losses)
+        return np.mean(trainer.test_losses).item()
 
     study = optuna.create_study(direction="minimize")
     study.optimize(objective, n_trials=num_trials)
-    print(f"Best params: {study.best_params}")
+    # print(f"Best params: {study.best_params}")
+    fig = optuna.visualization.plot_optimization_history(study)
+    fig2 = optuna.visualization.plot_param_importances(study)
+    fig3 = optuna.visualization.plot_contour(study)
+    fig4 = optuna.visualization.plot_terminator_improvement(study)
+    fig.show()
+    fig2.show()
+    fig3.show()
+    fig4.show()
     print(f"Best value: {study.best_value}")
     with open("params.json", "w") as file:
         json.dump(study.best_params, file)
@@ -177,6 +191,6 @@ def find_batch_size(batch_size: int, trainer: TransformerTrainer, train, test):
 if __name__ == "__main__":
     # vocab = json.load(open("vocab2.json", "r"))
     # print(encode(["all "],vocab,eos=False,sos=False,pad=False))
-    main()
-    # param_search(501, 100)
+    # main()
+    param_search(1501, 100)
     # gen()
