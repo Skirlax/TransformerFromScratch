@@ -130,7 +130,8 @@ class TransformerTrainer:
             self.optimizer.step()
             if epoch < scheduler_epochs and self.scheduler is not None:
                 self.scheduler.step()
-            pbar.set_description(f'Epoch: {epoch} Loss: {loss}')
+            if self.use_tqdm:
+                pbar.set_description(f'Epoch: {epoch} Loss: {loss}')
             if epoch % eval_every == 0:
                 self.test(test, batch_size, 50)
                 acc = self.calculate_accuracy(test, batch_size)
@@ -170,7 +171,8 @@ class TransformerTrainer:
             #     self.table.add_data(decoded[random_choice:random_choice + 5], decoded2[random_choice:random_choice + 5])
             loss = self.loss(output.view(-1, output.size(-1)), y_batch.view(-1))
             self.test_losses.append(loss.item())
-            pbar.set_description(f'Test Epoch: {epoch} Loss: {loss}')
+            if self.use_tqdm:
+                pbar.set_description(f'Test Epoch: {epoch} Loss: {loss}')
 
     @th.no_grad()
     def calculate_accuracy(self, test, batch_size: int):
