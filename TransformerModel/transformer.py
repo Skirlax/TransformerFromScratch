@@ -1,20 +1,17 @@
-import random
+from collections import Counter
+from itertools import chain
 
+import matplotlib.pyplot as plt
 import torch as th
-import numpy as np
-from TransformerModel.Layers.decoder_layer import DecoderLayer
-from TransformerModel.Layers.encoder_layer import EncoderLayer
+import wandb
+from torchmetrics.functional import accuracy
+from tqdm import tqdm
+
 from Embeddings.positional_embeddings import PositionalEmbeddings
 # from Embeddings.token_embeddings import decode
-from Embeddings.token_embeddings import decode, encode
-from tqdm import tqdm
-from itertools import chain
-import json
-from torchmetrics.functional import accuracy
-import matplotlib.pyplot as plt
-from itertools import chain
-import wandb
-from collections import Counter
+from Embeddings.token_embeddings import decode
+from TransformerModel.Layers.decoder_layer import DecoderLayer
+from TransformerModel.Layers.encoder_layer import EncoderLayer
 
 
 class TransformerEncoderDecoder(th.nn.Module):
@@ -91,13 +88,16 @@ class TransformerDecoder(th.nn.Module):
 
 class TransformerTrainer:
     def __init__(self, transformer: th.nn.Module, optimizer: th.optim,
-                 loss_fn: th.nn, lr: float, block_size: int, weight_decay: float, vocab: dict, table,log: bool = True):
+                 loss_fn: th.nn, lr: float, block_size: int,
+                 weight_decay: float, vocab: dict, table,
+                 log: bool = True, use_tqdm: bool = True):
         self.transformer = transformer
         self.optimizer = optimizer(self.transformer.parameters(), lr=lr, weight_decay=weight_decay)
         self.loss = loss_fn()
         self.lr = lr
         self.table = table
         self.vocab = vocab
+        self.use_tqdm = use_tqdm
         self.log = log
         self.save_tokens_every = 1000
         self.block_size = block_size
@@ -115,8 +115,10 @@ class TransformerTrainer:
         # self.scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer,min_lr=1e-8,verbose=True)
         self.transformer.to(self.device)
         self.transformer.train()
-        # hello how are you>?
-        pbar = tqdm(range(epochs))
+        if self.use_tqdm:
+            pbar = tqdm(range(epochs))
+        else:
+            pbar = range(epochs)
         for epoch in pbar:
             x_batch, y_batch = self.make_batch(train, batch_size, self.block_size)
             x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
@@ -144,7 +146,10 @@ class TransformerTrainer:
     def test(self, test, batch_size: int, test_epochs: int):
         # self.transformer.to(self.device)
         self.transformer.eval()
-        pbar = tqdm(range(test_epochs), position=1)
+        if self.use_tqdm:
+            pbar = tqdm(range(test_epochs), position=1)
+        else:
+            pbar = range(test_epochs)
         for epoch in pbar:
             x_batch, y_batch = self.make_batch(test, batch_size, self.block_size)
             x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
@@ -187,7 +192,7 @@ class TransformerTrainer:
         top_k = [[x] for x in top_k]
         decoded = decode(top_k, self.vocab)
         with open("error_tokens.txt", "a+") as file:
-            file.write("-"*30+"\n\n"+"\n".join(decoded))
+            file.write("-" * 30 + "\n\n" + "\n".join(decoded))
         self.error_tokens.clear()
 
         # arg_max = output.argmax(dim=-1, keepdim=True)
