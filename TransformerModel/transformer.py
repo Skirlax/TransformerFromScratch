@@ -109,10 +109,13 @@ class TransformerTrainer:
         self.scheduler = None
 
     def train(self, train, test, epochs: int, batch_size: int, eval_every: int = 500):
-        scheduler_epochs = int(epochs * (2 / 3))
-        # self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=4e-3, total_steps=scheduler_epochs,
-        #                                                   steps_per_epoch=scheduler_epochs // 2)
+        scheduler_epochs = 8000
+        step_every = 1
+        scheduler_start = 0
+        self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=5e-04, total_steps=scheduler_epochs,
+                                                          steps_per_epoch=scheduler_epochs // 2,verbose=False)
         # self.scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer,min_lr=1e-8,verbose=True)
+        # self.scheduler = th.optim.lr_scheduler.LinearLR(self.optimizer, 1, 1e-7,verbose=True,total_iters=10)
         self.transformer.to(self.device)
         self.transformer.train()
         if self.use_tqdm:
@@ -128,7 +131,7 @@ class TransformerTrainer:
             self.train_losses.append(loss.item())
             loss.backward()
             self.optimizer.step()
-            if epoch < scheduler_epochs and self.scheduler is not None:
+            if self.scheduler is not None and epoch < scheduler_epochs:
                 self.scheduler.step()
             if self.use_tqdm:
                 pbar.set_description(f'Epoch: {epoch} Loss: {loss}')
